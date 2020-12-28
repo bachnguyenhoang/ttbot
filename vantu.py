@@ -15,6 +15,10 @@ class VanTu(commands.Cog):
         self.__encoded_answers : List = list()
         self.__answer_status : List = list()
         
+        # keep track of user ids that can quit
+        self.__init_user_id = 0
+        self.__owner_user_id = 0
+        
         self.initialize_vtc_questions()
     
     @commands.command(help='Start a new `văn tự cổ`')
@@ -23,12 +27,18 @@ class VanTu(commands.Cog):
         if (self.__vantu_state == 0):
             
             if (len(args) > 0):
+                await ctx.channel.send("type `tt!vantu` to start a new game!")
                 return
+            # init questions & answers
             self.__current_answers = []
             self.__encoded_answers = []
             self.__answer_status = []
             question = self.__questions_db.sample(n=1)
             self.__current_topic, answers = question.index[0], question.values[0]
+            
+            #init start user id (for quit command)
+            self.__init_user_id = ctx.author.id
+            
             answers_msg : str = "A new `văn tự cổ` started by " + ctx.author.mention + '\n\n'
             answers_msg += "Chủ đề: `" + self.__current_topic + '`\n'
             print("[DEBUG] topic: " + str(self.__current_topic))
@@ -40,7 +50,7 @@ class VanTu(commands.Cog):
                 self.__current_answers.append(answer)
                 self.__answer_status.append(0)
                 def strip_vowels(answer):
-                    return ''.join(re.findall(r'[QWRTYPSDĐFGHJKLZXCVBNMÝỶỸỴỲ,/\(\)\'\"\s0-9\-\.\?]+',answer)).replace(' ','')
+                    return ''.join(re.findall(r'[QWRTYÝỶỸỴỲPSDĐFGHJKLZXCVBNM,/\(\)\[\]\{\}\'\"\s0-9\-\.\?]+',answer)).replace(' ','')
 
                 def randomly_insert_whitespaces(answer):
                     ret : str = ''
@@ -115,29 +125,26 @@ class VanTu(commands.Cog):
                     self.__vantu_state = 0
                     await ctx.channel.send("Congratulation! all `văn tự` were solved!")
             elif (args[0] == 'quit'):
-                answers_msg = ctx.author.mention + " quitted the game.\n"
-                answers_msg += "Chủ đề: `" + self.__current_topic + '`\n'
-                for i, val in enumerate(self.__current_answers):
-                    answers_msg += '#{}: {}'.format(i+1, val) + '\n'
-                await ctx.channel.send(answers_msg)
-                self.__vantu_state = 0
+                if (ctx.author.id == self.__init_user_id) or (ctx.author.id == self.__owner_user_id):
+                    answers_msg = ctx.author.mention + " quitted the game.\n"
+                    answers_msg += "Chủ đề: `" + self.__current_topic + '`\n'
+                    for i, val in enumerate(self.__current_answers):
+                        answers_msg += '#{}: {}'.format(i+1, val) + '\n'
+                    await ctx.channel.send(answers_msg)
+                    self.__vantu_state = 0
+                else:
+                    answers_msg = "Only <@" + str(self.__owner_user_id) + ">"
+                    
+                    if self.__owner_user_id != self.__init_user_id:
+                        answers_msg += "<@" + str(self.__init_user_id) + ">"
+                    answers_msg += " can quit the game!"
+                    await ctx.channel.send(answers_msg)
+                
+                return
             else:
                 await ctx.channel.send("Command not recognized!\nType `tt!vantu ans 'no. of keyword' 'your answer'` to answer!\ne.g `tt!vantu ans 1 HUI SUX`")
-                return            
-            #while not is_finished:
-             #   def check(message: discord.Message):
-              #      return ctx.channel == message.channel and self.bot.user != message.author
-#
- #               message: discord.Message = await self.bot.wait_for('message', check=check)
-#
- #               is_finished = (message.content.lower() == answer.lower())  
-  #              if not is_finished:
-   #                 print("[DEBUG] expect: " + str(answer))
-    #                print("[DEBUG] received: " + str(message.content))
-     #               await ctx.send('Wrong answer! Please try again!')
-      #          else:
-       #             await ctx.send('Right answer! Congrats {}!'.format(message.author))
-
+                return
+                
     def initialize_vtc_questions(self, question_file='database/vtc.csv'):
         df = pd.read_csv(question_file)
         df.drop(['Bình luận', 'Unnamed: 5'], axis=1, inplace=True)
